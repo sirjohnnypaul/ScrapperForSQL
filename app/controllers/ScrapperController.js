@@ -1261,6 +1261,426 @@ async uploadProductionCountry(req,res) {
         await console.log("done")
     });
 },        
+
+async welcome(req,res) {
+  
+  res.render('index');
+
+},
+
+async allMoviesList(req,res) {
+  
+  //aggregate all movies
+  let moviesList;
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from Movie`
+    moviesList = await result.recordset;
+    console.log(moviesList)
+  } catch (err) {
+      console.log(err)
+  }
+
+  moviesList.forEach((movie)=>{
+    //setup rating
+    let getDigits = Array.from(movie.filmRating.toString(), Number);
+    movie.filmRating = `${getDigits[0]}.${getDigits[1]}`
+
+    //remove ; for , in genres
+    let genres = movie.movieGenre.toString().split(";");
+    movie.movieGenre = genres.join(",")
+
+  })
+  return res.render("allMovies",{moviesList})
+},
+
+async movieDetails(req,res) {
+  let id = req.params.id
+  console.log(id)
+  //aggregate all movies
+  let movie;
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from Movie WHERE movieId = ${id}`
+    movie = await result.recordset;
+    console.log(movie[0].title)
+  } catch (err) {
+      console.log(err)
+  }
+
+  let moviePoster;
+  //getPoster
+  await axios.get(`http://www.omdbapi.com/?t=${movie[0].originalTitle}&apikey=553e1fb0`)
+  .then(function (response) {
+    // handle success
+    movie[0].poster = response.data.Poster;
+    console.log(response.data)
+    console.log(movie[0].poster)
+  })
+  .catch(function (error) {
+    // handle error
+    console.log(error);
+  })
+  .finally(function () {
+
+  });
+
+  //setup rating
+  let getDigits = Array.from(movie[0].filmRating.toString(), Number);
+  movie[0].filmRating = `${getDigits[0]}.${getDigits[1]}`
+
+  //remove ; for , in genres
+  let genres = movie[0].movieGenre.toString().split(";");
+  movie[0].movieGenre = genres.join(",")
+
+  //get director
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from Director WHERE directorId = ${movie[0].movieDirector}`
+    let directorData = await result.recordset;
+    movie[0].movieDirector = await `${directorData[0].directorName} ${directorData[0].directorSurname}`
+  } catch (err) {
+      console.log(err)
+  }
+
+  //get production
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from ProductionCountry WHERE countryId = ${movie[0].production}`
+    let production = await result.recordset;
+    movie[0].production = await production[0].countryName
+  } catch (err) {
+      console.log(err)
+  }
+
+
+  //get studio
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from Studio WHERE studioId = ${movie[0].studio}`
+    let studioData = await result.recordset;
+    console.log(studioData)
+    movie[0].studio = await studioData[0].studioName
+  } catch (err) {
+      console.log(err)
+  }
+
+  //get book
+  try {
+    // make sure that any items are correctly URL encoded in the connection string
+    await sql.connect(configAzureDbSimple)
+    const result = await sql.query`select * from Book WHERE bookId = ${movie[0].basedOnBook}`
+    let bookData = await result.recordset;
+    console.log(bookData)
+    //get book author
+    let bookAuthor;
+    try {
+      // make sure that any items are correctly URL encoded in the connection string
+      await sql.connect(configAzureDbSimple)
+      const result = await sql.query`select * from Author WHERE authorId = ${bookData[0].authorId}`
+      let authorData = await result.recordset;
+      console.log(authorData)
+      bookAuthor = await `${authorData[0].authorName} ${authorData[0].authorSurname}`
+    } catch (err) {
+        console.log(err)
+    }
+    movie[0].basedOnBook = await `Autor: ${bookAuthor} | Dzieło: ${bookData[0].bookTitle}`
+  } catch (err) {
+      console.log(err)
+  }
+
+  let fullCrew = movie[0].crew.split(";")
+  let fullCrewActors = [];
+
+  for(let x =0; x<fullCrew.length; x++){
+    try {
+      // make sure that any items are correctly URL encoded in the connection string
+      await sql.connect(configAzureDbSimple)
+      const result = await sql.query`select * from Actor WHERE actorId = ${fullCrew[x]}`
+      let actorData = await result.recordset;
+      await fullCrewActors.push(actorData)
+    } catch (err) {
+        console.log(err)
+    }
+  }
+ 
+
+  let fullRoles = movie[0].roles.split(";")
+  fullCrewRoles = []
+
+  for(let z=0; z<fullRoles.length; z++){
+    if(fullRoles[z]=="-"){
+      await fullCrewRoles.push("-")
+    } else  {
+      try {
+        // make sure that any items are correctly URL encoded in the connection string
+        await sql.connect(configAzureDbSimple)
+        const result = await sql.query`select * from MovieRole WHERE roleId = ${fullRoles[z]}`
+        let roleData = await result.recordset;
+        //console.log(roleData)
+        await fullCrewRoles.push(roleData)
+      } catch (err) {
+          console.log(err)
+      }
+    }
+  }
+
+  //console.log(fullCrewRoles)
+
+  let CrewAndRolesList = [];
+  let indexx = 0;
+  fullCrewActors.forEach((act)=>{
+    let actorD =  {
+      actorName:  act[0].actorName,
+      actorSurname: act[0].actorSurname,
+      roleName:  fullCrewRoles[indexx][0].roleName,
+      roleSurname: fullCrewRoles[indexx][0].roleSurname
+    }
+    CrewAndRolesList.push(actorD)
+    indexx++;
+  });
+
+console.log(CrewAndRolesList)
+
+return res.render("movieDetails",{movie:movie[0],crew:CrewAndRolesList})
+ },
+
+ async fiddle(req,res) {
+  let queries = [];
+
+  //GetMovieById
+  let getMovieById = `CREATE PROCEDURE GetMovieById  
+  @ID NUMERIC   
+AS   
+
+  SET NOCOUNT ON;  
+  SELECT TOP 1 Movie.Title,Movie.originalTitle,Movie.movieBio,Movie.filmYear,Movie.filmRating, Director.directorName, Director.directorSurname, ProductionCountry.countryName, Book.bookTitle, Author.authorName, Author.authorSurname FROM Movie, Director, ProductionCountry, Book, Author WHERE Director.directorId = Movie.movieDirector AND ProductionCountry.countryId = Movie.production AND Book.bookId = Movie.basedOnBook AND Author.authorId = Book.authorId AND Movie.movieId = @ID
+GO  `;
+
+let exampleQueryResult;
+try {
+  // make sure that any items are correctly URL encoded in the connection string
+  await sql.connect(configAzureDbSimple)
+  const result = await sql.query`EXEC GetMovieById @ID=7`
+  exampleQueryResult = await result.recordset;
+  await queries.push({getMovieById:getMovieById, response:exampleQueryResult})
+  console.log(exampleQueryResult)
+} catch (err) {
+    console.log(err)
+}
+
+
+//GetMovieActors
+let getMovieActors = `CREATE PROCEDURE AggregateMovieActors
+@ID NUMERIC   
+AS   
+
+SET NOCOUNT ON;  
+SELECT Actor.actorName, Actor.actorSurname, Movie.Title,Movie.originalTitle,Movie.movieBio,Director.directorName, Director.directorSurname FROM Movie, Director, Actor WHERE Director.directorId = Movie.movieDirector AND  Movie.movieId = @ID AND Actor.actorId IN (SELECT value FROM STRING_SPLIT(Movie.crew, ';'));
+GO  `;
+
+let exampleQueryResult2;
+try {
+// make sure that any items are correctly URL encoded in the connection string
+await sql.connect(configAzureDbSimple)
+const result = await sql.query`EXEC AggregateMovieActors @ID=7`
+exampleQueryResult2 = await result.recordset;
+await queries.push({getMovieActors:getMovieActors, response:exampleQueryResult2})
+console.log(exampleQueryResult)
+} catch (err) {
+  console.log(err)
+}
+
+
+//GetMovieRoles
+let getMovieRoles = `CREATE PROCEDURE AggregateMovieRoles
+@ID NUMERIC   
+AS   
+
+SET NOCOUNT ON;  
+SELECT MovieRole.roleName, MovieRole.roleSurname, Movie.Title,Movie.originalTitle,Movie.movieBio,Director.directorName, Director.directorSurname FROM Movie, Director, MovieRole WHERE Director.directorId = Movie.movieDirector AND  Movie.movieId = @ID AND MovieRole.roleId IN (SELECT value FROM STRING_SPLIT(Movie.roles, ';'));
+GO `;
+
+let exampleQueryResult3;
+try {
+// make sure that any items are correctly URL encoded in the connection string
+await sql.connect(configAzureDbSimple)
+const result = await sql.query`EXEC AggregateMovieRoles @ID = 7`
+exampleQueryResult3 = await result.recordset;
+await queries.push({getMovieRoles:getMovieRoles, response:exampleQueryResult3})
+console.log(exampleQueryResult)
+} catch (err) {
+  console.log(err)
+}
+
+let getOtherQueries = `/*1. Imie, nazwisko kilentów, którzy zamówili produkty do Alaski*/ 
+SELECT customerName, customerSurname, Shipping_State
+    FROM Shop
+    WHERE Shipping_State LIKE 'Alaska';
+
+/*2. Imie, nazwisko klientow, ktorzy zaplacili za produktu w przedziale 50-100*/
+SELECT customerName, customerSurname, Retail_Price
+    FROM Shop
+    WHERE Retail_Price BETWEEN 50 AND 100;
+
+/*3. Id, Imie, Nazwisko klienta, ktore nie koncza sie na litery z zakresu p-w*/
+SELECT customerID, customerName, customerSurname
+    FROM Shop
+    WHERE RTRIM(customerSurname) LIKE '%[^p-w]';
+
+/*4. Wyświetlic nazwiska klientow, ich dlugosc, imiona klientów, miejsce litery 'k'
+w imionach;*/
+
+SELECT customerSurname, 
+    LEN(customerSurname) AS customerSurnameLength,
+    customerName, CHARINDEX('k', customerSurname, 1) AS letterAindex
+    FROM Shop;
+
+/* 5. Wyswietlic id klietna, id transakcji, nazwę przedmiotu dla zakupów o kwocie mniejszej niz 70 zl i dyskoncie lojalnościowym powyżej 0,04 ;
+wyswietlic obnizoną kwotę zakupów do do "okraglej liczby" (np. 17%
+zamieniamy na 10%, 6% na 0% itp.) */
+
+SELECT customerID, transactionId, ItemDescription, Loyalty_Discount, Retail_Price,
+    FLOOR(Retail_Price/10)*10 AS NewRetail_Price
+    FROM Shop
+    WHERE Retail_Price < 70;
+
+ /*6. Wyswietlic inicjaly klientow (w formacie pierwsza imienia kropka spacja pierwsza nazwiska)*/
+
+SELECT customerID, customerName, customerSurname,
+    SUBSTRING(customerName, 1, 1) + '. ' + ' ' + SUBSTRING(customerSurname, 1, 1) + '.' AS ClientInitials
+    FROM Shop;
+
+
+/* 7. Znalezc klientow, ktorych imie zaczynaja dwie te same litery, co w nazwisk */
+
+SELECT customerID, customerName, customerSurname
+    FROM Shop
+    WHERE SUBSTRING(customerName, 1, 2) = SUBSTRING(customerSurname, 1, 2);
+
+/* 8. Wyświetlic klientów, którzy zrobili zakupy w czasie 2013-12-13 2016-12-13 15:43:39.0000000*/
+
+SELECT customerID, customerName, customerSurname
+    FROM Shop
+    WHERE YEAR([transactionDate]) LIKE '2016-12-13 15:08:52.0000000';
+
+/* 9. Wyswietlic klientow, ktorzy zrobili zakupy w cenie powyzej 100 bez dyskontu lojalnosciowego */
+
+SELECT customerID, customerName, customerSurname
+    FROM Shop
+    WHERE Retail_Price <100 AND Loyalty_Discount = 0;
+
+/* 10. Wyswietlic klientkow, ktorzy zrobili zakupy w cenie ponizej 80 z dyskontem lojalnościowym powyzej 0,07 oraz i kupili plascz */
+
+SELECT customerID, customerName, customerSurname, Retail_Price, Loyalty_Discount, ItemDescription
+    FROM Shop
+    WHERE Retail_Price < 80 AND Loyalty_Discount < 0.07 And ItemDescription LIKE 'COAT';
+
+
+
+/* 11. Wyswietlić zamowienia do ktorych miast maja  maksymalną cenę zakupow w kolejności wg ID klienta*/
+SELECT customerID, customerName, customerSurname, Retail_Price
+    FROM Shop
+    WHERE Retail_Price = (SELECT MAX(Retail_Price) FROM Shop)
+    GROUP BY customerID, Retail_Price, customerName, customerSurname;
+
+
+/* 12. Wyświetlić średnią cenę zakupów */
+
+SELECT AVG(Retail_Price) AS MeanRetailPrice
+    FROM Shop;
+
+/* 13. Wyswietlic klientow, ktorzy zaplacili powyzej sredniej ceny zakupow wg kolejnosci dyskontu lojalnosciowego */
+
+SELECT  customerName, customerSurname, AVG(Retail_Price) AS Retail_PriceMean, Loyalty_Discount
+    FROM Shop
+    GROUP BY Loyalty_Discount, customerName, customerSurname
+    HAVING AVG(Retail_Price)>(SELECT AVG(Retail_Price) FROM Shop);
+
+/* 14. Wyświetlić średni dyskont lojalnosciowy */
+
+SELECT AVG(Loyalty_Discount) AS MeanLoyalty_Discount
+    FROM Shop;
+
+/* 15. Wyswietlić klientow, ktorzy zaplacili ponizej sredniego dyskontu lojalnosciowego w kolejnosci wg nazwiska klienta */
+
+SELECT customerName, customerSurname, AVG(Loyalty_Discount) AS AboveMeanLoyalty_Discount
+    FROm Shop
+    GROUP BY customerSurname, customerName
+    HAVING AVG(Loyalty_Discount)>(SELECT AVG(Loyalty_Discount) FROM Shop);
+
+/* 16. Wyswietlić miasta, do ktorych klienci wydaja powyzej sredniej ceny zakupu */
+
+SELECT Shipping_State, customerName, customerSurname, AVG(Retail_Price) AS AboveMeanRetail_Price
+    FROM Shop
+    GROUP BY Retail_Price, customerName, customerSurname, Shipping_State
+    HAVING AVG(Retail_Price)>(SELECT AVG(Retail_Price) FROM Shop);
+
+/* 17. Wyswietlić całkowity dochód sklepu z zakupów */
+
+SELECT SUM(Retail_Price) AS SumRetail_Price
+    FROM Shop;
+
+/* 18. Wyświetić wariancję cen zakupów */
+
+SELECT VAR(Retail_Price) AS VarRetail_Price
+    FROM Shop
+
+/* 19. Wyświetlić odchylenie standardowe cen zakupów */
+
+SELECT STDEV(Retail_Price) AS StandDevRetail_Price
+    FROM Shop
+
+
+select * from Shop
+
+/* Unique products list */
+SELECT DISTINCT ItemDescription
+FROM  Shop 
+ORDER BY ItemDescription
+
+/* Unique products list and number of transactions*/
+select Item,
+  ItemDescription,
+  count(distinct transactionId) sold
+from Shop
+group by ItemDescription,Item;
+
+/* Unique products list, sold and total income*/
+select ItemDescription,
+  Retail_Price,
+  count(distinct transactionId) sold,
+  sum(Retail_Price) income
+from Shop
+group by ItemDescription,Retail_Price
+
+/* List of clients, purchased items, number sold and total income*/
+select customerName,customerSurname,ItemDescription, Retail_Price,
+count(distinct transactionId) sold,
+sum(Retail_Price) income
+from Shop
+group by Retail_Price,customerName,customerSurname,ItemDescription,Retail_Price
+
+/* List of products sold in different states, income */
+select ItemDescription,Shipping_State,Retail_Price,
+count(distinct Shipping_State) numberOfOrders,
+sum(Retail_Price) incomeFromState
+from Shop
+group by ItemDescription,Shipping_State,Retail_Price
+ORDER by incomeFromState desc
+`;
+
+await queries.push({getOtherQueries:getOtherQueries})
+
+  return res.render("fiddle",{queries})
+},
+
+
 }
 
 async function findAuthorID(name,surname) {  

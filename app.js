@@ -7,6 +7,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require("path");
 const expressValidator = require('express-validator');
+const ejs = require('ejs');
 
 //routes definitions
 const all = require('./routes/all');
@@ -22,20 +23,15 @@ app.use(express.json({
     verify: undefined
   }))
 
-
+app.set('view engine', 'ejs')
 //Middlewares
 app.use(logger('dev'));
 app.use(bodyParser.urlencoded({extended:true}));
 app.use(bodyParser.json());
 
 app.use(cors());
-
-//Routes
-app.get('/',(req,res,next)=>{
-    res.send('Hello');
-})
-
-app.use('/api', all);
+app.use('/', express.static("public"))
+app.use('/', all);
 
 // catch 404 and forward to error handler
 // app.use(function(req, res, next)

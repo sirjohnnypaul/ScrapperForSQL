@@ -1,0 +1,29 @@
+.wrapper-main {
+    background: url(../images/back.jpg);
+    background-size: cover;
+    height: 100vh;
+}
+
+.body {
+    margin: 0 auto;
+    padding: 0px;
+    background: black;
+}
+
+* {
+    margin: 0 auto;
+    padding: 0px;
+}
+
+.mainH1 {
+    font-size: 460%;
+    padding-top: 40vh;
+}
+
+.mainMoviesp {
+    text-align: left !important;
+}
+.tableAllMovies {
+    max-height: 90vh;
+    overflow-y: auto;
+}
